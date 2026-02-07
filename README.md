@@ -26,9 +26,19 @@ npx convex dev
 ```
 
 This will:
-- prompt you to login
+- prompt you to login (cloud) **or** let you run locally without an account
 - create a dev deployment
 - generate `convex/_generated/` (required for the Next.js app)
+
+#### Non-interactive / no-login mode (local anonymous deployment)
+
+If you want to run Convex locally without logging in (useful for headless setups), you can do:
+
+```bash
+CONVEX_AGENT_MODE=anonymous npx convex dev
+```
+
+This will create a local deployment at `http://127.0.0.1:3210` and write URLs to `.env.local`.
 
 Environment variables:
 
