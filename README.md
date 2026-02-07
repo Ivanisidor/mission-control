@@ -42,16 +42,15 @@ This will create a local deployment at `http://127.0.0.1:3210` and write URLs to
 
 Environment variables:
 
-Create `.env.local`:
+Copy `.env.example` → `.env.local` and edit:
 
 ```bash
-# Convex
-NEXT_PUBLIC_CONVEX_URL="<your convex dev deployment url>"
-CONVEX_URL="<same as above>"
-
-# Activity ingest route
-ACTIVITY_INGEST_TOKEN="change-me"
+cp .env.example .env.local
 ```
+
+At minimum set:
+- `ACTIVITY_INGEST_TOKEN`
+- (optional) `MISSION_CONTROL_BASE_URL` (defaults to `http://localhost:3000`)
 
 ## Run the app
 
@@ -62,6 +61,17 @@ npm run dev
 Open: http://localhost:3000
 
 ## Activity ingestion
+
+### Log helper script
+
+Once the app is running locally, you can write an event into the feed:
+
+```bash
+npm run log -- tool.exec "Ran tests" '{"command":"npm test"}'
+```
+
+(Equivalent to POSTing to `/api/activity/ingest`.)
+
 
 POST to:
 
