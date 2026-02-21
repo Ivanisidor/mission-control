@@ -8,11 +8,17 @@ export default function Home() {
         Your dashboard for Nux activity, scheduled tasks, and global search.
       </p>
       <div className="flex gap-2">
-        <Link className="rounded-md bg-black px-4 py-2 text-sm text-white" href="/activity">
-          Activity
+        <Link className="rounded-md bg-black px-4 py-2 text-sm text-white" href="/tasks">
+          Task Board
         </Link>
         <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/calendar">
           Calendar
+        </Link>
+        <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/team">
+          Team
+        </Link>
+        <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/memory">
+          Memory
         </Link>
         <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/search">
           Search

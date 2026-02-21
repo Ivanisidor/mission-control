@@ -17,6 +17,18 @@ export default defineSchema({
     scheduleExpr: v.string(),
     nextRunAt: v.number(),
     createdAt: v.number(),
+    assignee: v.optional(v.union(v.literal("ivan"), v.literal("nux"), v.literal("system"))),
+    status: v.optional(
+      v.union(
+        v.literal("scheduled"),
+        v.literal("planned"),
+        v.literal("done"),
+        v.literal("cancelled"),
+      ),
+    ),
+    source: v.optional(v.union(v.literal("cron"), v.literal("manual"))),
+    notes: v.optional(v.string()),
+    promotedToCron: v.optional(v.boolean()),
   })
     .index("by_nextRunAt", ["nextRunAt"])
     .searchIndex("search_name", { searchField: "name" }),

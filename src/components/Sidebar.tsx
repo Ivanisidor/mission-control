@@ -1,8 +1,11 @@
 import Link from "next/link";
 
 const nav = [
-  { href: "/activity", label: "Activity" },
+  { href: "/tasks", label: "Task Board" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/team", label: "Team" },
+  { href: "/memory", label: "Memory" },
+  { href: "/activity", label: "Activity" },
   { href: "/search", label: "Search" },
 ];
 
