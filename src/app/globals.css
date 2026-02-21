@@ -1,17 +1,93 @@
 @import "tailwindcss";
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
+  --background: 220 25% 98%;
+  --foreground: 230 30% 10%;
+  --surface: 0 0% 100%;
+  --surface-2: 220 18% 96%;
+  --muted-foreground: 225 10% 40%;
+  --border: 225 20% 85%;
+  --accent: 248 88% 62%;
+}
+
+:root[data-theme="light"] {
+  --background: 220 25% 98%;
+  --foreground: 230 30% 10%;
+  --surface: 0 0% 100%;
+  --surface-2: 220 18% 96%;
+  --muted-foreground: 225 10% 40%;
+  --border: 225 20% 85%;
+  --accent: 248 88% 62%;
+}
+
+:root[data-theme="dark"] {
+  --background: 222 28% 10%;
+  --foreground: 210 25% 92%;
+  --surface: 222 24% 14%;
+  --surface-2: 223 20% 18%;
+  --muted-foreground: 220 10% 70%;
+  --border: 224 18% 27%;
+  --accent: 214 95% 62%;
+}
+
+:root[data-theme="vs-dark"] {
+  --background: 220 14% 10%;
+  --foreground: 210 30% 92%;
+  --surface: 220 13% 14%;
+  --surface-2: 220 12% 19%;
+  --muted-foreground: 220 10% 68%;
+  --border: 220 10% 28%;
+  --accent: 210 95% 60%;
+}
+
+:root[data-theme="dracula"] {
+  --background: 231 15% 14%;
+  --foreground: 60 30% 96%;
+  --surface: 232 15% 18%;
+  --surface-2: 232 14% 22%;
+  --muted-foreground: 231 12% 74%;
+  --border: 232 10% 30%;
+  --accent: 326 100% 74%;
+}
+
+:root[data-theme="ocean"] {
+  --background: 205 56% 10%;
+  --foreground: 195 30% 94%;
+  --surface: 204 45% 15%;
+  --surface-2: 203 42% 19%;
+  --muted-foreground: 197 16% 74%;
+  --border: 201 35% 30%;
+  --accent: 187 90% 45%;
 }
 
 body {
   color: hsl(var(--foreground));
-  background: hsl(var(--background));
+  background: radial-gradient(circle at top right, hsl(var(--accent) / 0.12), transparent 30%),
+    hsl(var(--background));
 }
 
 .text-muted-foreground {
   color: hsl(var(--muted-foreground));
+}
+
+.border,
+.border-b,
+.border-r,
+.border-dashed {
+  border-color: hsl(var(--border)) !important;
+}
+
+.bg-white {
+  background-color: hsl(var(--surface)) !important;
+}
+
+.bg-zinc-50,
+.bg-zinc-100 {
+  background-color: hsl(var(--surface-2)) !important;
+}
+
+button.bg-black,
+a.bg-black {
+  background: linear-gradient(135deg, hsl(var(--accent)), hsl(var(--accent) / 0.8)) !important;
+  border: none;
 }

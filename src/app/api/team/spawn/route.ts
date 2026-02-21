@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       "Return a short action plan with assumptions and deliverables.",
     ].join("\n\n");
 
-    const { stdout } = await execFileAsync("openclaw", ["agent", "--agent", "main", "--message", message, "--json"], {
+    const { stdout } = await execFileAsync("openclaw", ["agent", "--agent", member.id, "--message", message, "--json"], {
       cwd: "/home/ivan/clawd",
       timeout: 120000,
       maxBuffer: 2 * 1024 * 1024,
