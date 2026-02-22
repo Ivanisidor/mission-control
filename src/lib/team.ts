@@ -8,9 +8,11 @@ export type TeamMember = {
   responsibilities: string[];
   whenToUse: string[];
   status: "ready" | "active" | "idle";
+  order: number;
 };
 
-export const TEAM_MEMBERS: TeamMember[] = [
+// Legacy hardcoded source kept only for Convex backfill safety/fallbacks.
+export const LEGACY_TEAM_MEMBERS: TeamMember[] = [
   {
     id: "main",
     name: "Nux (main)",
@@ -26,6 +28,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     ],
     whenToUse: ["Always", "Cross-functional work", "Final review + delivery"],
     status: "active",
+    order: 0,
   },
   {
     id: "rex",
@@ -42,6 +45,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     ],
     whenToUse: ["Coding tasks", "Refactors", "Technical debugging"],
     status: "ready",
+    order: 1,
   },
   {
     id: "scout",
@@ -58,6 +62,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     ],
     whenToUse: ["Research", "Documentation", "Structured summaries"],
     status: "ready",
+    order: 2,
   },
   {
     id: "hawk",
@@ -74,5 +79,6 @@ export const TEAM_MEMBERS: TeamMember[] = [
     ],
     whenToUse: ["UI/UX design", "Workflow improvements", "Design consistency"],
     status: "ready",
+    order: 3,
   },
 ];

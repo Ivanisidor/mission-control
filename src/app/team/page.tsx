@@ -1,8 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { TASK_STORAGE_KEY, type Task } from "@/lib/taskBoard";
-import { TEAM_MEMBERS, type TeamMember } from "@/lib/team";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { TeamMember } from "@/lib/team";
+
+type BoardTask = {
+  assignee: string;
+  status: "todo" | "in_progress" | "blocked" | "done";
+  updatedAt: number;
+  createdAt: number;
+};
 
 const disciplineLabels: Record<TeamMember["discipline"], string> = {
   developers: "Developers",
@@ -21,9 +29,9 @@ function fmtHours(h: number | null) {
   return `${h.toFixed(1)}h`;
 }
 
-function fmtDate(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString();
+function fmtDate(ts: number | null) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString();
 }
 
 function capacityLabel(open: number) {
@@ -33,19 +41,18 @@ function capacityLabel(open: number) {
 }
 
 export default function TeamPage() {
-  const [tasks] = useState<Task[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = window.localStorage.getItem(TASK_STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as Task[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const tasks = useQuery(api.taskBoard.list, {});
+  const teamMembers = useQuery(api.teamMembers.list, {});
+  const ensureTeamSeed = useMutation(api.teamMembers.ensureSeed);
 
   const [spawnTask, setSpawnTask] = useState("");
   const [spawningMember, setSpawningMember] = useState<string | null>(null);
   const [spawnOutput, setSpawnOutput] = useState<string>("");
+
+  useEffect(() => {
+    if (!teamMembers) return;
+    if (teamMembers.length === 0) void ensureTeamSeed({});
+  }, [teamMembers, ensureTeamSeed]);
 
   async function spawnWithRole(member: TeamMember) {
     setSpawningMember(member.id);
@@ -70,12 +77,12 @@ export default function TeamPage() {
         totalAssigned: number;
         openAssigned: number;
         completed: number;
-        lastCompletedAt: string | null;
+        lastCompletedAt: number | null;
         avgCompletionHours: number | null;
       }
     >();
 
-    for (const member of TEAM_MEMBERS) {
+    for (const member of (teamMembers ?? [])) {
       byMember.set(member.id, {
         totalAssigned: 0,
         openAssigned: 0,
@@ -85,23 +92,21 @@ export default function TeamPage() {
       });
     }
 
-    for (const t of tasks) {
+    for (const t of ((tasks ?? []) as BoardTask[])) {
       const bucket = byMember.get(t.assignee);
       if (!bucket) continue;
       bucket.totalAssigned += 1;
       if (t.status !== "done") bucket.openAssigned += 1;
       if (t.status === "done") {
         bucket.completed += 1;
-        if (!bucket.lastCompletedAt || new Date(t.updatedAt).getTime() > new Date(bucket.lastCompletedAt).getTime()) {
-          bucket.lastCompletedAt = t.updatedAt;
-        }
+        if (!bucket.lastCompletedAt || t.updatedAt > bucket.lastCompletedAt) bucket.lastCompletedAt = t.updatedAt;
       }
     }
 
-    for (const member of TEAM_MEMBERS) {
-      const memberTasks = tasks.filter((t) => t.assignee === member.id && t.status === "done");
+    for (const member of (teamMembers ?? [])) {
+      const memberTasks = ((tasks ?? []) as BoardTask[]).filter((t) => t.assignee === member.id && t.status === "done");
       const times = memberTasks
-        .map((t) => (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()) / 36e5)
+        .map((t) => (t.updatedAt - t.createdAt) / 36e5)
         .filter((h) => Number.isFinite(h) && h >= 0);
 
       const bucket = byMember.get(member.id);
@@ -110,19 +115,21 @@ export default function TeamPage() {
     }
 
     return byMember;
-  }, [tasks]);
+  }, [tasks, teamMembers]);
 
-  const groups = {
-    developers: TEAM_MEMBERS.filter((m) => m.discipline === "developers"),
-    writers: TEAM_MEMBERS.filter((m) => m.discipline === "writers"),
-    designers: TEAM_MEMBERS.filter((m) => m.discipline === "designers"),
-  } as const;
+  const groups = useMemo(() => ({
+    developers: (teamMembers ?? []).filter((m) => m.discipline === "developers"),
+    writers: (teamMembers ?? []).filter((m) => m.discipline === "writers"),
+    designers: (teamMembers ?? []).filter((m) => m.discipline === "designers"),
+  }), [teamMembers]);
 
-  const capacityRows = TEAM_MEMBERS.map((m) => {
-    const stats = runStats.get(m.id);
-    const open = stats?.openAssigned ?? 0;
-    return { member: m, stats, open, cap: capacityLabel(open) };
-  }).sort((a, b) => b.open - a.open);
+  const capacityRows = (teamMembers ?? [])
+    .map((m) => {
+      const stats = runStats.get(m.id);
+      const open = stats?.openAssigned ?? 0;
+      return { member: m, stats, open, cap: capacityLabel(open) };
+    })
+    .sort((a, b) => b.open - a.open);
 
   return (
     <div className="space-y-6">
@@ -171,7 +178,7 @@ export default function TeamPage() {
 
                   <div className="mt-2">
                     <button
-                      onClick={() => void spawnWithRole(member)}
+                      onClick={() => void spawnWithRole(member as TeamMember)}
                       disabled={spawningMember === member.id}
                       className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
                     >

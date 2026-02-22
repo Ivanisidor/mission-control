@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { TEAM_MEMBERS } from "@/lib/team";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../../../convex/_generated/api";
+import { LEGACY_TEAM_MEMBERS } from "@/lib/team";
 
 const execFileAsync = promisify(execFile);
 
@@ -10,7 +12,28 @@ export async function POST(req: Request) {
     const body = (await req.json()) as { memberId?: string; task?: string };
     if (!body.memberId) return NextResponse.json({ ok: false, error: "memberId is required" }, { status: 400 });
 
-    const member = TEAM_MEMBERS.find((m) => m.id === body.memberId);
+    const convexUrl = process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL;
+    let member = LEGACY_TEAM_MEMBERS.find((m) => m.id === body.memberId);
+
+    if (convexUrl) {
+      const client = new ConvexHttpClient(convexUrl);
+      const fromConvex = await client.query(api.teamMembers.getByAgentId, { id: body.memberId });
+      if (fromConvex) {
+        member = {
+          id: fromConvex.id,
+          name: fromConvex.name,
+          type: fromConvex.type,
+          discipline: fromConvex.discipline,
+          role: fromConvex.role,
+          roleBrief: fromConvex.roleBrief,
+          responsibilities: fromConvex.responsibilities,
+          whenToUse: fromConvex.whenToUse,
+          status: fromConvex.status,
+          order: fromConvex.order,
+        };
+      }
+    }
+
     if (!member) return NextResponse.json({ ok: false, error: "Unknown member" }, { status: 404 });
 
     const message = [

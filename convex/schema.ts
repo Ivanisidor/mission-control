@@ -42,4 +42,21 @@ export default defineSchema({
   })
     .index("by_updatedAt", ["updatedAt"])
     .searchIndex("search_title", { searchField: "title" }),
+
+  teamMembers: defineTable({
+    id: v.string(),
+    name: v.string(),
+    type: v.union(v.literal("core"), v.literal("subagent")),
+    discipline: v.union(v.literal("developers"), v.literal("writers"), v.literal("designers")),
+    role: v.string(),
+    roleBrief: v.string(),
+    responsibilities: v.array(v.string()),
+    whenToUse: v.array(v.string()),
+    status: v.union(v.literal("ready"), v.literal("active"), v.literal("idle")),
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_id", ["id"])
+    .index("by_order", ["order"]),
 });

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { ASSIGNEE_OPTIONS, assigneeName, type Status } from "@/lib/taskBoard";
+import { assigneeName, assigneeOptionsFromTeam, type Status } from "@/lib/taskBoard";
+import type { TeamMember } from "@/lib/team";
 
 const statusLabel: Record<Status, string> = {
   todo: "To Do",
@@ -22,23 +23,31 @@ type BoardTask = {
 
 export default function TasksPage() {
   const tasks = useQuery(api.taskBoard.list, {});
-  const ensureSeed = useMutation(api.taskBoard.ensureSeed);
+  const teamMembers = useQuery(api.teamMembers.list, {});
+
+  const ensureTaskSeed = useMutation(api.taskBoard.ensureSeed);
+  const ensureTeamSeed = useMutation(api.teamMembers.ensureSeed);
   const createTask = useMutation(api.taskBoard.create);
   const updateTask = useMutation(api.taskBoard.update);
 
+  const assigneeOptions = useMemo(() => assigneeOptionsFromTeam((teamMembers ?? []) as TeamMember[]), [teamMembers]);
+
   const [title, setTitle] = useState("");
-  const [assignee, setAssignee] = useState<string>("nux-core");
+  const [assignee, setAssignee] = useState<string>("ivan");
   const [query] = useState(() => {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("q")?.trim().toLowerCase() ?? "";
   });
 
   useEffect(() => {
+    if (!teamMembers) return;
+    if (teamMembers.length === 0) void ensureTeamSeed({});
+  }, [teamMembers, ensureTeamSeed]);
+
+  useEffect(() => {
     if (!tasks) return;
-    if (tasks.length === 0) {
-      void ensureSeed({});
-    }
-  }, [tasks, ensureSeed]);
+    if (tasks.length === 0) void ensureTaskSeed({});
+  }, [tasks, ensureTaskSeed]);
 
   const grouped = useMemo(() => {
     const byStatus: Record<Status, BoardTask[]> = { todo: [], in_progress: [], blocked: [], done: [] };
@@ -73,7 +82,7 @@ export default function TasksPage() {
         <div className="flex flex-wrap gap-2">
           <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="What needs to get done?" className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm" />
           <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="rounded-md border px-3 py-2 text-sm">
-            {ASSIGNEE_OPTIONS.map((a) => (
+            {assigneeOptions.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
@@ -81,7 +90,7 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {!tasks ? (
+      {!tasks || !teamMembers ? (
         <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">Loading tasks…</div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -96,10 +105,10 @@ export default function TasksPage() {
                 {grouped[status].map((task) => (
                   <article key={task._id} className="rounded-md border p-2">
                     <div className="text-sm font-medium">{task.title}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee)}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee, assigneeOptions)}</div>
                     <div className="mt-2 flex gap-2">
                       <select value={task.assignee} onChange={(e) => patchTask(task._id, { assignee: e.target.value })} className="rounded border px-2 py-1 text-xs">
-                        {ASSIGNEE_OPTIONS.map((a) => (
+                        {assigneeOptions.map((a) => (
                           <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
                       </select>
