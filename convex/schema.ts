@@ -32,4 +32,14 @@ export default defineSchema({
   })
     .index("by_nextRunAt", ["nextRunAt"])
     .searchIndex("search_name", { searchField: "name" }),
+
+  taskBoardTasks: defineTable({
+    title: v.string(),
+    status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("blocked"), v.literal("done")),
+    assignee: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_updatedAt", ["updatedAt"])
+    .searchIndex("search_title", { searchField: "title" }),
 });
