@@ -17,7 +17,7 @@ export default defineSchema({
     scheduleExpr: v.string(),
     nextRunAt: v.number(),
     createdAt: v.number(),
-    assignee: v.optional(v.union(v.literal("ivan"), v.literal("nux"), v.literal("system"))),
+    assignee: v.optional(v.string()),
     status: v.optional(
       v.union(
         v.literal("scheduled"),
@@ -35,8 +35,31 @@ export default defineSchema({
 
   taskBoardTasks: defineTable({
     title: v.string(),
+    project: v.optional(v.string()),
     status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("blocked"), v.literal("done")),
     assignee: v.string(),
+    acceptanceCriteria: v.optional(v.array(v.string())),
+    artifactType: v.optional(
+      v.union(
+        v.literal("code"),
+        v.literal("document"),
+        v.literal("decision"),
+        v.literal("asset"),
+        v.literal("config"),
+        v.literal("delivery"),
+        v.literal("other"),
+      ),
+    ),
+    evidenceRef: v.optional(v.string()),
+    verificationNote: v.optional(v.string()),
+    verifiedBy: v.optional(v.string()),
+    verifiedAt: v.optional(v.number()),
+    blockerOwner: v.optional(v.string()),
+    blockerReason: v.optional(v.string()),
+    unblockAction: v.optional(v.string()),
+    deadlineAt: v.optional(v.number()),
+    decisionRequired: v.optional(v.boolean()),
+    lastStatusChangeAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -57,6 +80,6 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_id", ["id"])
+    .index("by_memberId", ["id"])
     .index("by_order", ["order"]),
 });

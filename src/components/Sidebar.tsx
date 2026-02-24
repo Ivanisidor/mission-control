@@ -7,6 +7,7 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 const nav = [
   { href: "/tasks", label: "Task Board" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/office", label: "Office" },
   { href: "/team", label: "Team" },
   { href: "/memory", label: "Memory" },
   { href: "/activity", label: "Activity" },

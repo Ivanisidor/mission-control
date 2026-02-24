@@ -41,7 +41,7 @@ export const createManual = mutation({
   args: {
     name: v.string(),
     nextRunAt: v.number(),
-    assignee: v.union(v.literal("ivan"), v.literal("nux")),
+    assignee: v.string(),
     status: v.union(v.literal("planned"), v.literal("done"), v.literal("cancelled")),
     notes: v.optional(v.string()),
   },
@@ -64,7 +64,7 @@ export const createManual = mutation({
 export const updateManual = mutation({
   args: {
     id: v.id("scheduledTasks"),
-    assignee: v.optional(v.union(v.literal("ivan"), v.literal("nux"))),
+    assignee: v.optional(v.string()),
     status: v.optional(v.union(v.literal("planned"), v.literal("done"), v.literal("cancelled"))),
     notes: v.optional(v.string()),
     name: v.optional(v.string()),

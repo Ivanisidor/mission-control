@@ -19,6 +19,23 @@ type BoardTask = {
   title: string;
   status: Status;
   assignee: string;
+  evidenceRef?: string;
+  verificationNote?: string;
+  verifiedBy?: string;
+  blockerOwner?: string;
+  blockerReason?: string;
+  unblockAction?: string;
+  deadlineAt?: number;
+};
+
+type Draft = {
+  evidenceRef: string;
+  verificationNote: string;
+  verifiedBy: string;
+  blockerOwner: string;
+  blockerReason: string;
+  unblockAction: string;
+  deadlineAt: string;
 };
 
 export default function TasksPage() {
@@ -38,6 +55,8 @@ export default function TasksPage() {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("q")?.trim().toLowerCase() ?? "";
   });
+  const [error, setError] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
   useEffect(() => {
     if (!teamMembers) return;
@@ -59,6 +78,22 @@ export default function TasksPage() {
     return byStatus;
   }, [tasks, query]);
 
+  function getDraft(task: BoardTask): Draft {
+    return drafts[task._id] ?? {
+      evidenceRef: task.evidenceRef ?? "",
+      verificationNote: task.verificationNote ?? "",
+      verifiedBy: task.verifiedBy ?? "",
+      blockerOwner: task.blockerOwner ?? "",
+      blockerReason: task.blockerReason ?? "",
+      unblockAction: task.unblockAction ?? "",
+      deadlineAt: task.deadlineAt ? new Date(task.deadlineAt).toISOString().slice(0, 16) : "",
+    };
+  }
+
+  function patchDraft(taskId: string, patch: Partial<Draft>) {
+    setDrafts((prev) => ({ ...prev, [taskId]: { ...prev[taskId], ...patch } as Draft }));
+  }
+
   function addTask() {
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -66,8 +101,43 @@ export default function TasksPage() {
     setTitle("");
   }
 
-  function patchTask(id: Id<"taskBoardTasks">, patch: { assignee?: string; status?: Status }) {
-    void updateTask({ id, ...patch });
+  async function saveDetails(task: BoardTask) {
+    const d = getDraft(task);
+    setError("");
+    try {
+      await updateTask({
+        id: task._id,
+        evidenceRef: d.evidenceRef,
+        verificationNote: d.verificationNote,
+        verifiedBy: d.verifiedBy,
+        blockerOwner: d.blockerOwner,
+        blockerReason: d.blockerReason,
+        unblockAction: d.unblockAction,
+        deadlineAt: d.deadlineAt ? new Date(d.deadlineAt).getTime() : undefined,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save task details.");
+    }
+  }
+
+  async function patchTask(id: Id<"taskBoardTasks">, task: BoardTask, patch: { assignee?: string; status?: Status }) {
+    const d = getDraft(task);
+    setError("");
+    try {
+      await updateTask({
+        id,
+        ...patch,
+        evidenceRef: d.evidenceRef,
+        verificationNote: d.verificationNote,
+        verifiedBy: d.verifiedBy,
+        blockerOwner: d.blockerOwner,
+        blockerReason: d.blockerReason,
+        unblockAction: d.unblockAction,
+        deadlineAt: d.deadlineAt ? new Date(d.deadlineAt).getTime() : undefined,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update task.");
+    }
   }
 
   return (
@@ -90,6 +160,8 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {error && <div className="rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-700">{error}</div>}
+
       {!tasks || !teamMembers ? (
         <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">Loading tasks…</div>
       ) : (
@@ -102,25 +174,39 @@ export default function TasksPage() {
               </div>
 
               <div className="space-y-2">
-                {grouped[status].map((task) => (
-                  <article key={task._id} className="rounded-md border p-2">
-                    <div className="text-sm font-medium">{task.title}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee, assigneeOptions)}</div>
-                    <div className="mt-2 flex gap-2">
-                      <select value={task.assignee} onChange={(e) => patchTask(task._id, { assignee: e.target.value })} className="rounded border px-2 py-1 text-xs">
-                        {assigneeOptions.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                      </select>
-                      <select value={task.status} onChange={(e) => patchTask(task._id, { status: e.target.value as Status })} className="rounded border px-2 py-1 text-xs">
-                        <option value="todo">To Do</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="blocked">Blocked</option>
-                        <option value="done">Done</option>
-                      </select>
-                    </div>
-                  </article>
-                ))}
+                {grouped[status].map((task) => {
+                  const draft = getDraft(task);
+                  return (
+                    <article key={task._id} className="rounded-md border p-2">
+                      <div className="text-sm font-medium">{task.title}</div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee, assigneeOptions)}</div>
+                      <div className="mt-2 flex gap-2">
+                        <select value={task.assignee} onChange={(e) => void patchTask(task._id, task, { assignee: e.target.value })} className="rounded border px-2 py-1 text-xs">
+                          {assigneeOptions.map((a) => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                          ))}
+                        </select>
+                        <select value={task.status} onChange={(e) => void patchTask(task._id, task, { status: e.target.value as Status })} className="rounded border px-2 py-1 text-xs">
+                          <option value="todo">To Do</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="blocked">Blocked</option>
+                          <option value="done">Done</option>
+                        </select>
+                      </div>
+
+                      <input value={draft.evidenceRef} onChange={(e) => patchDraft(task._id, { evidenceRef: e.target.value })} placeholder="Evidence URL / path" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+                      <input value={draft.verificationNote} onChange={(e) => patchDraft(task._id, { verificationNote: e.target.value })} placeholder="Verification note" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+                      <input value={draft.verifiedBy} onChange={(e) => patchDraft(task._id, { verifiedBy: e.target.value })} placeholder="Verified by" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+
+                      <input value={draft.blockerOwner} onChange={(e) => patchDraft(task._id, { blockerOwner: e.target.value })} placeholder="Blocker owner" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+                      <input value={draft.blockerReason} onChange={(e) => patchDraft(task._id, { blockerReason: e.target.value })} placeholder="Blocker reason" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+                      <input value={draft.unblockAction} onChange={(e) => patchDraft(task._id, { unblockAction: e.target.value })} placeholder="Unblock action" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+                      <input type="datetime-local" value={draft.deadlineAt} onChange={(e) => patchDraft(task._id, { deadlineAt: e.target.value })} className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+
+                      <button onClick={() => void saveDetails(task)} className="mt-2 rounded border px-2 py-1 text-xs">Save details</button>
+                    </article>
+                  );
+                })}
                 {grouped[status].length === 0 && <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">No tasks</div>}
               </div>
             </section>

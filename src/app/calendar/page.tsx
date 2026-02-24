@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { LEGACY_TEAM_MEMBERS, type TeamMember } from "@/lib/team";
 
-type Assignee = "ivan" | "nux";
 type EventStatus = "planned" | "done" | "cancelled";
 type ViewMode = "week" | "month";
 
@@ -36,6 +36,20 @@ function dayLabel(d: Date) {
 }
 
 export default function CalendarPage() {
+  const teamMembers = useQuery(api.teamMembers.list, {});
+  const ensureTeamSeed = useMutation(api.teamMembers.ensureSeed);
+
+  useEffect(() => {
+    if (!teamMembers) return;
+    if (teamMembers.length === 0) void ensureTeamSeed({});
+  }, [teamMembers, ensureTeamSeed]);
+
+  const members = (teamMembers && teamMembers.length > 0 ? teamMembers : LEGACY_TEAM_MEMBERS) as TeamMember[];
+  const assigneeOptions = useMemo(
+    () => [{ id: "ivan", name: "Ivan" }, { id: "system", name: "System" }, ...members.map((m) => ({ id: m.id, name: m.name }))],
+    [members],
+  );
+
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [query] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -56,7 +70,7 @@ export default function CalendarPage() {
   const to = viewMode === "week" ? weekEnd.getTime() - 1 : monthGridEnd.getTime() - 1;
 
   const [title, setTitle] = useState("");
-  const [assignee, setAssignee] = useState<Assignee>("nux");
+  const [assignee, setAssignee] = useState("nux");
   const [status, setStatus] = useState<EventStatus>("planned");
   const [startsAtLocal, setStartsAtLocal] = useState(() => {
     const d = new Date();
@@ -159,11 +173,12 @@ export default function CalendarPage() {
           />
           <select
             value={assignee}
-            onChange={(e) => setAssignee(e.target.value as Assignee)}
+            onChange={(e) => setAssignee(e.target.value)}
             className="rounded-md border px-3 py-2 text-sm"
           >
-            <option value="nux">Nux</option>
-            <option value="ivan">Ivan</option>
+            {assigneeOptions.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
           </select>
           <div className="flex gap-2">
             <select
@@ -245,14 +260,15 @@ export default function CalendarPage() {
                                 <option value="cancelled">cancelled</option>
                               </select>
                               <select
-                                value={(item.assignee as Assignee | undefined) ?? "nux"}
+                                value={item.assignee ?? "nux"}
                                 onChange={(e) =>
-                                  void updateManual({ id: item._id, assignee: e.target.value as Assignee })
+                                  void updateManual({ id: item._id, assignee: e.target.value })
                                 }
                                 className="rounded border px-2 py-1 text-[11px]"
                               >
-                                <option value="nux">nux</option>
-                                <option value="ivan">ivan</option>
+                                {assigneeOptions.map((a) => (
+                                  <option key={a.id} value={a.id}>{a.id}</option>
+                                ))}
                               </select>
                               <button
                                 onClick={() => void createCronFromManual(item)}

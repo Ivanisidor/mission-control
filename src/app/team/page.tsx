@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import type { TeamMember } from "@/lib/team";
+import { LEGACY_TEAM_MEMBERS, type TeamMember } from "@/lib/team";
 
 type BoardTask = {
   assignee: string;
@@ -70,6 +70,8 @@ export default function TeamPage() {
     setSpawnOutput(`Spawned ${data.member}.\n\n${data.output ?? ""}`);
   }
 
+  const members = (teamMembers && teamMembers.length > 0 ? teamMembers : LEGACY_TEAM_MEMBERS) as TeamMember[];
+
   const runStats = useMemo(() => {
     const byMember = new Map<
       string,
@@ -82,7 +84,7 @@ export default function TeamPage() {
       }
     >();
 
-    for (const member of (teamMembers ?? [])) {
+    for (const member of members) {
       byMember.set(member.id, {
         totalAssigned: 0,
         openAssigned: 0,
@@ -103,7 +105,7 @@ export default function TeamPage() {
       }
     }
 
-    for (const member of (teamMembers ?? [])) {
+    for (const member of members) {
       const memberTasks = ((tasks ?? []) as BoardTask[]).filter((t) => t.assignee === member.id && t.status === "done");
       const times = memberTasks
         .map((t) => (t.updatedAt - t.createdAt) / 36e5)
@@ -115,15 +117,15 @@ export default function TeamPage() {
     }
 
     return byMember;
-  }, [tasks, teamMembers]);
+  }, [tasks, members]);
 
   const groups = useMemo(() => ({
-    developers: (teamMembers ?? []).filter((m) => m.discipline === "developers"),
-    writers: (teamMembers ?? []).filter((m) => m.discipline === "writers"),
-    designers: (teamMembers ?? []).filter((m) => m.discipline === "designers"),
-  }), [teamMembers]);
+    developers: members.filter((m) => m.discipline === "developers"),
+    writers: members.filter((m) => m.discipline === "writers"),
+    designers: members.filter((m) => m.discipline === "designers"),
+  }), [members]);
 
-  const capacityRows = (teamMembers ?? [])
+  const capacityRows = members
     .map((m) => {
       const stats = runStats.get(m.id);
       const open = stats?.openAssigned ?? 0;
@@ -139,6 +141,12 @@ export default function TeamPage() {
           Core operator + role-specialized subagents used for delivery. Organized by discipline.
         </p>
       </div>
+
+      {teamMembers !== undefined && teamMembers.length === 0 ? (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+          Team list from Convex is currently empty. Showing fallback roster while sync catches up.
+        </section>
+      ) : null}
 
       <section className="rounded-xl border bg-white p-4">
         <h3 className="text-sm font-semibold">One-click spawn with role brief</h3>
