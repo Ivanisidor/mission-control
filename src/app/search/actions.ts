@@ -1,6 +1,7 @@
 "use server";
 
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -29,12 +30,15 @@ export async function searchWorkspace(term: string): Promise<FileMatch[]> {
   const q = term.trim();
   if (!q) return [];
 
-  const paths = [
+  const candidatePaths = [
     "/home/ivan/clawd/MEMORY.md",
     "/home/ivan/clawd/TODO.md",
     "/home/ivan/clawd/README.md",
     "/home/ivan/clawd/memory",
   ];
+
+  const paths = candidatePaths.filter((p) => existsSync(p));
+  if (paths.length === 0) return [];
 
   const args = [
     "-n",
@@ -62,14 +66,13 @@ export async function searchWorkspace(term: string): Promise<FileMatch[]> {
 
     if (err.code === "ENOENT" || /not found/i.test(err.message || "")) {
       try {
+        const grepPaths = candidatePaths.filter((p) => existsSync(p));
+        if (grepPaths.length === 0) return [];
         const grepArgs = [
           "-RIn",
           "--",
           q,
-          "/home/ivan/clawd/MEMORY.md",
-          "/home/ivan/clawd/TODO.md",
-          "/home/ivan/clawd/README.md",
-          "/home/ivan/clawd/memory",
+          ...grepPaths,
         ];
         const { stdout } = await execFileAsync("grep", grepArgs, {
           timeout: 5_000,
