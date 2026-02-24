@@ -12,6 +12,7 @@ const nav = [
   { href: "/memory", label: "Memory" },
   { href: "/follow-ups", label: "Follow-Ups" },
   { href: "/activity", label: "Activity" },
+  { href: "/weekly-summary", label: "Weekly Summary" },
   { href: "/search", label: "Search" },
 ];
 
