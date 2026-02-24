@@ -66,6 +66,23 @@ export default defineSchema({
     .index("by_updatedAt", ["updatedAt"])
     .searchIndex("search_title", { searchField: "title" }),
 
+  followUpQueue: defineTable({
+    project: v.string(),
+    title: v.string(),
+    description: v.string(),
+    actionOwner: v.string(),
+    requestedBy: v.string(),
+    deadline: v.optional(v.number()),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"), v.literal("deferred")),
+    ivanNote: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_project", ["project"])
+    .index("by_updatedAt", ["updatedAt"]),
+
   teamMembers: defineTable({
     id: v.string(),
     name: v.string(),

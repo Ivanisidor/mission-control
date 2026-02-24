@@ -10,6 +10,7 @@ const nav = [
   { href: "/office", label: "Office" },
   { href: "/team", label: "Team" },
   { href: "/memory", label: "Memory" },
+  { href: "/follow-ups", label: "Follow-Ups" },
   { href: "/activity", label: "Activity" },
   { href: "/search", label: "Search" },
 ];

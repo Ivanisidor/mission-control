@@ -17,6 +17,9 @@ export default function Home() {
         <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/team">
           Team
         </Link>
+        <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/follow-ups">
+          Follow-Ups
+        </Link>
         <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/memory">
           Memory
         </Link>

@@ -9,6 +9,7 @@
  */
 
 import type * as activityEvents from "../activityEvents.js";
+import type * as followUpQueue from "../followUpQueue.js";
 import type * as scheduledTasks from "../scheduledTasks.js";
 import type * as search from "../search.js";
 import type * as taskBoard from "../taskBoard.js";
@@ -22,6 +23,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activityEvents: typeof activityEvents;
+  followUpQueue: typeof followUpQueue;
   scheduledTasks: typeof scheduledTasks;
   search: typeof search;
   taskBoard: typeof taskBoard;
