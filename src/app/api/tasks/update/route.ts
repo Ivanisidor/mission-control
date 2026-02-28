@@ -26,8 +26,29 @@ export async function POST(req: Request) {
   }
 
   const client = new ConvexHttpClient(convexUrl);
+  const source = body.source === "legacy" ? "legacy" : "v1";
 
   try {
+    if (source === "v1") {
+      if (body.assigneeId !== undefined) {
+        await client.mutation(api.tasks.assign, {
+          id: body.id as Id<"tasks">,
+          assigneeIds: body.assigneeId ? [body.assigneeId as Id<"agents">] : [],
+        });
+      }
+
+      if (body.status !== undefined || body.evidenceRef !== undefined || body.blockerReason !== undefined) {
+        await client.mutation(api.tasks.transition, {
+          id: body.id as Id<"tasks">,
+          status: body.status,
+          ...(body.evidenceRef !== undefined && { evidenceRef: body.evidenceRef }),
+          ...(body.blockerReason !== undefined && { blockerReason: body.blockerReason }),
+        });
+      }
+
+      return NextResponse.json({ ok: true, id: body.id, source: "v1" });
+    }
+
     const result = await client.mutation(api.taskBoard.update, {
       id: body.id as Id<"taskBoardTasks">,
       ...(body.title !== undefined && { title: body.title }),
@@ -45,7 +66,7 @@ export async function POST(req: Request) {
       ...(body.deadlineAt !== undefined && { deadlineAt: body.deadlineAt }),
       ...(body.decisionRequired !== undefined && { decisionRequired: body.decisionRequired }),
     });
-    return NextResponse.json({ ok: true, id: result });
+    return NextResponse.json({ ok: true, id: result, source: "legacy" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ ok: false, error: msg }, { status: 422 });

@@ -20,6 +20,12 @@ export async function GET(req: Request) {
   }
 
   const client = new ConvexHttpClient(convexUrl);
-  const tasks = await client.query(api.taskBoard.list, {});
-  return NextResponse.json({ ok: true, tasks });
+
+  const v1Tasks = await client.query(api.tasks.list, {});
+  if (v1Tasks.length > 0) {
+    return NextResponse.json({ ok: true, source: "v1", tasks: v1Tasks });
+  }
+
+  const legacyTasks = await client.query(api.taskBoard.list, {});
+  return NextResponse.json({ ok: true, source: "legacy", tasks: legacyTasks });
 }

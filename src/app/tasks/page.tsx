@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { assigneeName, assigneeOptionsFromTeam, type Status } from "@/lib/taskBoard";
+import { assigneeOptionsFromTeam, type Status } from "@/lib/taskBoard";
 import type { TeamMember } from "@/lib/team";
 
 const statusLabel: Record<Status, string> = {
@@ -14,43 +14,43 @@ const statusLabel: Record<Status, string> = {
   done: "Done",
 };
 
-type BoardTask = {
-  _id: Id<"taskBoardTasks">;
+type ViewTask = {
+  id: string;
+  source: "v1" | "legacy";
   title: string;
   status: Status;
   assignee: string;
   evidenceRef?: string;
-  verificationNote?: string;
-  verifiedBy?: string;
-  blockerOwner?: string;
   blockerReason?: string;
-  unblockAction?: string;
-  deadlineAt?: number;
 };
 
 type Draft = {
   evidenceRef: string;
-  verificationNote: string;
-  verifiedBy: string;
-  blockerOwner: string;
   blockerReason: string;
-  unblockAction: string;
-  deadlineAt: string;
+};
+
+const mapV1ToBoardStatus = (s: "inbox" | "assigned" | "in_progress" | "review" | "done" | "blocked"): Status => {
+  if (s === "in_progress") return "in_progress";
+  if (s === "blocked") return "blocked";
+  if (s === "done") return "done";
+  return "todo";
 };
 
 export default function TasksPage() {
-  const tasks = useQuery(api.taskBoard.list, {});
+  const v1Tasks = useQuery(api.tasks.list, {});
+  const legacyTasks = useQuery(api.taskBoard.list, {});
+
+  const agents = useQuery(api.agents.list, { enabledOnly: false });
   const teamMembers = useQuery(api.teamMembers.list, {});
 
-  const ensureTaskSeed = useMutation(api.taskBoard.ensureSeed);
-  const ensureTeamSeed = useMutation(api.teamMembers.ensureSeed);
-  const createTask = useMutation(api.taskBoard.create);
-  const updateTask = useMutation(api.taskBoard.update);
+  const createV1Task = useMutation(api.tasks.create);
+  const assignV1Task = useMutation(api.tasks.assign);
+  const transitionV1Task = useMutation(api.tasks.transition);
 
-  const assigneeOptions = useMemo(() => assigneeOptionsFromTeam((teamMembers ?? []) as TeamMember[]), [teamMembers]);
+  const createLegacyTask = useMutation(api.taskBoard.create);
+  const updateLegacyTask = useMutation(api.taskBoard.update);
 
   const [title, setTitle] = useState("");
-  const [assignee, setAssignee] = useState<string>("ivan");
   const [query] = useState(() => {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("q")?.trim().toLowerCase() ?? "";
@@ -58,35 +58,61 @@ export default function TasksPage() {
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
-  useEffect(() => {
-    if (!teamMembers) return;
-    if (teamMembers.length === 0) void ensureTeamSeed({});
-  }, [teamMembers, ensureTeamSeed]);
+  const hasV1Agents = !!agents && agents.length > 0;
+  const hasV1Tasks = !!v1Tasks && v1Tasks.length > 0;
 
-  useEffect(() => {
-    if (!tasks) return;
-    if (tasks.length === 0) void ensureTaskSeed({});
-  }, [tasks, ensureTaskSeed]);
+  const assigneeOptions = useMemo(() => {
+    if (hasV1Agents) {
+      return (agents ?? []).map((a) => ({
+        id: a._id,
+        name: a.name,
+        type: a.sessionKey.endsWith(":main") || a.sessionKey === "agent:main" ? "owner" : "subagent",
+      }));
+    }
+    return assigneeOptionsFromTeam((teamMembers ?? []) as TeamMember[]);
+  }, [agents, teamMembers, hasV1Agents]);
+
+  const [assignee, setAssignee] = useState<string>("");
+
+  const viewTasks = useMemo<ViewTask[]>(() => {
+    if (hasV1Tasks && v1Tasks) {
+      return v1Tasks.map((t) => ({
+        id: t._id,
+        source: "v1",
+        title: t.title,
+        status: mapV1ToBoardStatus(t.status),
+        assignee: t.assigneeIds[0] ?? "",
+        evidenceRef: t.evidenceRef,
+        blockerReason: t.blockerReason,
+      }));
+    }
+
+    return (legacyTasks ?? []).map((t) => ({
+      id: t._id,
+      source: "legacy",
+      title: t.title,
+      status: t.status,
+      assignee: t.assignee,
+      evidenceRef: t.evidenceRef,
+      blockerReason: t.blockerReason,
+    }));
+  }, [v1Tasks, legacyTasks, hasV1Tasks]);
 
   const grouped = useMemo(() => {
-    const byStatus: Record<Status, BoardTask[]> = { todo: [], in_progress: [], blocked: [], done: [] };
-    if (!tasks) return byStatus;
-    for (const t of tasks) {
+    const byStatus: Record<Status, ViewTask[]> = { todo: [], in_progress: [], blocked: [], done: [] };
+    for (const t of viewTasks) {
       if (query && !t.title.toLowerCase().includes(query)) continue;
-      byStatus[t.status].push(t as BoardTask);
+      byStatus[t.status].push(t);
     }
     return byStatus;
-  }, [tasks, query]);
+  }, [viewTasks, query]);
 
-  function getDraft(task: BoardTask): Draft {
-    return drafts[task._id] ?? {
+  const effectiveAssignee = assignee || assigneeOptions[0]?.id || "";
+
+  function getDraft(task: ViewTask): Draft {
+    return drafts[task.id] ?? {
       evidenceRef: task.evidenceRef ?? "",
-      verificationNote: task.verificationNote ?? "",
-      verifiedBy: task.verifiedBy ?? "",
-      blockerOwner: task.blockerOwner ?? "",
       blockerReason: task.blockerReason ?? "",
-      unblockAction: task.unblockAction ?? "",
-      deadlineAt: task.deadlineAt ? new Date(task.deadlineAt).toISOString().slice(0, 16) : "",
     };
   }
 
@@ -94,75 +120,95 @@ export default function TasksPage() {
     setDrafts((prev) => ({ ...prev, [taskId]: { ...prev[taskId], ...patch } as Draft }));
   }
 
-  function addTask() {
-    const trimmed = title.trim();
-    if (!trimmed) return;
-    void createTask({ title: trimmed, assignee });
-    setTitle("");
+  function assigneeName(id: string) {
+    return assigneeOptions.find((a) => a.id === id)?.name ?? id;
   }
 
-  async function saveDetails(task: BoardTask) {
-    const d = getDraft(task);
+  async function addTask() {
+    const trimmed = title.trim();
+    if (!trimmed) return;
     setError("");
+
     try {
-      await updateTask({
-        id: task._id,
-        evidenceRef: d.evidenceRef,
-        verificationNote: d.verificationNote,
-        verifiedBy: d.verifiedBy,
-        blockerOwner: d.blockerOwner,
-        blockerReason: d.blockerReason,
-        unblockAction: d.unblockAction,
-        deadlineAt: d.deadlineAt ? new Date(d.deadlineAt).getTime() : undefined,
-      });
+      if (hasV1Agents) {
+        await createV1Task({
+          title: trimmed,
+          description: trimmed,
+          assigneeIds: effectiveAssignee ? [effectiveAssignee as Id<"agents">] : [],
+          createdBy: "main",
+        });
+      } else {
+        await createLegacyTask({ title: trimmed, assignee: effectiveAssignee || "ivan" });
+      }
+      setTitle("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save task details.");
+      setError(e instanceof Error ? e.message : "Failed to add task.");
     }
   }
 
-  async function patchTask(id: Id<"taskBoardTasks">, task: BoardTask, patch: { assignee?: string; status?: Status }) {
+  async function patchTask(task: ViewTask, patch: { assignee?: string; status?: Status }) {
     const d = getDraft(task);
     setError("");
+
     try {
-      await updateTask({
-        id,
-        ...patch,
-        evidenceRef: d.evidenceRef,
-        verificationNote: d.verificationNote,
-        verifiedBy: d.verifiedBy,
-        blockerOwner: d.blockerOwner,
-        blockerReason: d.blockerReason,
-        unblockAction: d.unblockAction,
-        deadlineAt: d.deadlineAt ? new Date(d.deadlineAt).getTime() : undefined,
-      });
+      if (task.source === "v1") {
+        if (patch.assignee !== undefined) {
+          await assignV1Task({ id: task.id as Id<"tasks">, assigneeIds: patch.assignee ? [patch.assignee as Id<"agents">] : [] });
+        }
+
+        if (patch.status !== undefined || d.evidenceRef || d.blockerReason) {
+          const nextStatus = patch.status ?? task.status;
+          const mappedStatus: "inbox" | "assigned" | "in_progress" | "review" | "done" | "blocked" =
+            nextStatus === "todo" ? (patch.assignee ?? task.assignee ? "assigned" : "inbox") : nextStatus;
+
+          await transitionV1Task({
+            id: task.id as Id<"tasks">,
+            status: mappedStatus,
+            evidenceRef: d.evidenceRef || undefined,
+            blockerReason: d.blockerReason || undefined,
+          });
+        }
+      } else {
+        await updateLegacyTask({
+          id: task.id as Id<"taskBoardTasks">,
+          ...(patch.assignee !== undefined && { assignee: patch.assignee }),
+          ...(patch.status !== undefined && { status: patch.status }),
+          evidenceRef: d.evidenceRef,
+          blockerReason: d.blockerReason,
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update task.");
     }
   }
 
+  const loading = !v1Tasks || !legacyTasks || !agents || !teamMembers;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold">Task Board</h1>
-        <p className="text-sm text-muted-foreground">Track work by status and assign tasks to Ivan or any team member.</p>
+        <p className="text-sm text-muted-foreground">
+          {hasV1Tasks ? "Using v1 tasks as primary source." : "Using legacy task board fallback until v1 tasks are present."}
+        </p>
       </div>
 
       <div className="rounded-lg border bg-white p-4">
         <div className="mb-2 text-sm font-medium">Add task</div>
         <div className="flex flex-wrap gap-2">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="What needs to get done?" className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm" />
-          <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="rounded-md border px-3 py-2 text-sm">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void addTask()} placeholder="What needs to get done?" className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm" />
+          <select value={effectiveAssignee} onChange={(e) => setAssignee(e.target.value)} className="rounded-md border px-3 py-2 text-sm">
             {assigneeOptions.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
-          <button onClick={addTask} className="rounded-md bg-black px-4 py-2 text-sm text-white">Add</button>
+          <button onClick={() => void addTask()} className="rounded-md bg-black px-4 py-2 text-sm text-white">Add</button>
         </div>
       </div>
 
       {error && <div className="rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-700">{error}</div>}
 
-      {!tasks || !teamMembers ? (
+      {loading ? (
         <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">Loading tasks…</div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -177,16 +223,17 @@ export default function TasksPage() {
                 {grouped[status].map((task) => {
                   const draft = getDraft(task);
                   return (
-                    <article key={task._id} className="rounded-md border p-2">
+                    <article key={task.id} className="rounded-md border p-2">
                       <div className="text-sm font-medium">{task.title}</div>
-                      <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee, assigneeOptions)}</div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee)}</div>
+
                       <div className="mt-2 flex gap-2">
-                        <select value={task.assignee} onChange={(e) => void patchTask(task._id, task, { assignee: e.target.value })} className="rounded border px-2 py-1 text-xs">
+                        <select value={task.assignee} onChange={(e) => void patchTask(task, { assignee: e.target.value })} className="rounded border px-2 py-1 text-xs">
                           {assigneeOptions.map((a) => (
                             <option key={a.id} value={a.id}>{a.name}</option>
                           ))}
                         </select>
-                        <select value={task.status} onChange={(e) => void patchTask(task._id, task, { status: e.target.value as Status })} className="rounded border px-2 py-1 text-xs">
+                        <select value={task.status} onChange={(e) => void patchTask(task, { status: e.target.value as Status })} className="rounded border px-2 py-1 text-xs">
                           <option value="todo">To Do</option>
                           <option value="in_progress">In Progress</option>
                           <option value="blocked">Blocked</option>
@@ -194,16 +241,9 @@ export default function TasksPage() {
                         </select>
                       </div>
 
-                      <input value={draft.evidenceRef} onChange={(e) => patchDraft(task._id, { evidenceRef: e.target.value })} placeholder="Evidence URL / path" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
-                      <input value={draft.verificationNote} onChange={(e) => patchDraft(task._id, { verificationNote: e.target.value })} placeholder="Verification note" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
-                      <input value={draft.verifiedBy} onChange={(e) => patchDraft(task._id, { verifiedBy: e.target.value })} placeholder="Verified by" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
-
-                      <input value={draft.blockerOwner} onChange={(e) => patchDraft(task._id, { blockerOwner: e.target.value })} placeholder="Blocker owner" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
-                      <input value={draft.blockerReason} onChange={(e) => patchDraft(task._id, { blockerReason: e.target.value })} placeholder="Blocker reason" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
-                      <input value={draft.unblockAction} onChange={(e) => patchDraft(task._id, { unblockAction: e.target.value })} placeholder="Unblock action" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
-                      <input type="datetime-local" value={draft.deadlineAt} onChange={(e) => patchDraft(task._id, { deadlineAt: e.target.value })} className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
-
-                      <button onClick={() => void saveDetails(task)} className="mt-2 rounded border px-2 py-1 text-xs">Save details</button>
+                      <input value={draft.evidenceRef} onChange={(e) => patchDraft(task.id, { evidenceRef: e.target.value })} placeholder="Evidence URL / path" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+                      <input value={draft.blockerReason} onChange={(e) => patchDraft(task.id, { blockerReason: e.target.value })} placeholder="Blocker reason" className="mt-2 w-full rounded border px-2 py-1 text-[11px]" />
+                      <button onClick={() => void patchTask(task, {})} className="mt-2 rounded border px-2 py-1 text-xs">Save details</button>
                     </article>
                   );
                 })}
