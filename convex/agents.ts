@@ -33,6 +33,54 @@ export const byId = query({
   },
 });
 
+export const seedFromTeamMembers = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const team = await ctx.db.query("teamMembers").collect();
+    let inserted = 0;
+    let updated = 0;
+
+    for (const member of team) {
+      const sessionKey = `agent:${member.id}`;
+      const existing = await ctx.db
+        .query("agents")
+        .withIndex("by_sessionKey", (q) => q.eq("sessionKey", sessionKey))
+        .first();
+
+      const role = member.role || member.roleBrief || "Agent";
+      const mappedStatus = member.status === "active" ? "active" : "idle";
+      const level = member.id === "main" ? "lead" : "specialist";
+
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          name: member.name,
+          role,
+          status: mappedStatus,
+          level,
+          enabled: true,
+          updatedAt: now,
+        });
+        updated += 1;
+      } else {
+        await ctx.db.insert("agents", {
+          name: member.name,
+          role,
+          status: mappedStatus,
+          sessionKey,
+          level,
+          enabled: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        inserted += 1;
+      }
+    }
+
+    return { inserted, updated, totalTeamMembers: team.length };
+  },
+});
+
 export const upsert = mutation({
   args: {
     id: v.optional(v.id("agents")),
