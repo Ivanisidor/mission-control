@@ -8,6 +8,20 @@ if (!CONVEX_URL) {
 
 const sessionKey = process.env.HEARTBEAT_SESSION_KEY || "agent:main";
 const sinceMs = Number(process.env.HEARTBEAT_SINCE_MS || (Date.now() - 60 * 60_000));
+const autoClaim = process.env.HEARTBEAT_AUTO_CLAIM !== "0";
+
+if (autoClaim) {
+  const claimResp = await fetch(`${CONVEX_URL}/api/mutation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: "tasks:claimAssignedForSessionKey", args: { sessionKey, limit: 20 } }),
+  });
+
+  if (!claimResp.ok) {
+    console.error(`task claim failed (${claimResp.status})`);
+    process.exit(1);
+  }
+}
 
 const resp = await fetch(`${CONVEX_URL}/api/query`, {
   method: "POST",

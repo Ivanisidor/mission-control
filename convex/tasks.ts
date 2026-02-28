@@ -138,6 +138,42 @@ export const block = mutation({
   },
 });
 
+export const claimAssignedForSessionKey = mutation({
+  args: { sessionKey: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_sessionKey", (q) => q.eq("sessionKey", args.sessionKey))
+      .first();
+
+    if (!agent) return { claimed: 0, taskIds: [] as string[] };
+
+    const cap = Math.max(1, Math.min(args.limit ?? 20, 100));
+    const assigned = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "assigned"))
+      .collect();
+
+    const toClaim = assigned.filter((t) => t.assigneeIds.includes(agent._id)).slice(0, cap);
+    const now = Date.now();
+
+    for (const task of toClaim) {
+      await ctx.db.patch(task._id, {
+        status: "in_progress",
+        updatedAt: now,
+      });
+      await ctx.db.insert("activityEvents", {
+        type: "task_claimed",
+        summary: `${agent.name} claimed task: ${task.title}`,
+        details: { id: task._id, claimedBy: agent._id, claimedBySessionKey: args.sessionKey },
+        createdAt: now,
+      });
+    }
+
+    return { claimed: toClaim.length, taskIds: toClaim.map((t) => String(t._id)) };
+  },
+});
+
 export const migrateFromLegacyBoard = mutation({
   args: { dryRun: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
