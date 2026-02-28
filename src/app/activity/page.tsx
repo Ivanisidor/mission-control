@@ -8,7 +8,7 @@ function formatTs(ms: number) {
 }
 
 export default function ActivityPage() {
-  const events = useQuery(api.activityEvents.list, { limit: 200 });
+  const events = useQuery(api.activity.unifiedRecent, { limit: 200 });
 
   return (
     <div className="space-y-4">

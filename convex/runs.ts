@@ -27,7 +27,7 @@ export const createStarted = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    return await ctx.db.insert("runs", {
+    const id = await ctx.db.insert("runs", {
       taskId: args.taskId,
       agentId: args.agentId,
       sessionKey: args.sessionKey,
@@ -39,6 +39,15 @@ export const createStarted = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    await ctx.db.insert("activityEvents", {
+      type: "run_started",
+      summary: `Run started (${args.trigger})`,
+      details: { runId: id, taskId: args.taskId, agentId: args.agentId, sessionKey: args.sessionKey },
+      createdAt: now,
+    });
+
+    return id;
   },
 });
 
@@ -54,6 +63,7 @@ export const finish = mutation({
     summary: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: args.status,
       tokensIn: args.tokensIn,
@@ -62,8 +72,16 @@ export const finish = mutation({
       durationMs: args.durationMs,
       error: args.error,
       summary: args.summary,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
+
+    await ctx.db.insert("activityEvents", {
+      type: "run_finished",
+      summary: `Run finished (${args.status})`,
+      details: { runId: args.id, status: args.status, durationMs: args.durationMs, tokensTotal: args.tokensTotal },
+      createdAt: now,
+    });
+
     return args.id;
   },
 });

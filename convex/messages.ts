@@ -100,6 +100,13 @@ export const create = mutation({
       });
     }
 
+    await ctx.db.insert("activityEvents", {
+      type: "message_sent",
+      summary: `Task message posted${args.fromAgentId ? " by agent" : ""}`,
+      details: { taskId: args.taskId, messageId: id, fromAgentId: args.fromAgentId, mentions: [...mentionIdSet] },
+      createdAt: now,
+    });
+
     return id;
   },
 });

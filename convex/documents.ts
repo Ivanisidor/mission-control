@@ -13,7 +13,14 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    return await ctx.db.insert("documents", { ...args, createdAt: now, updatedAt: now });
+    const id = await ctx.db.insert("documents", { ...args, createdAt: now, updatedAt: now });
+    await ctx.db.insert("activityEvents", {
+      type: "document_created",
+      summary: `Document created: ${args.title}`,
+      details: { id, taskId: args.taskId, type: args.type, authorAgentId: args.authorAgentId },
+      createdAt: now,
+    });
+    return id;
   },
 });
 

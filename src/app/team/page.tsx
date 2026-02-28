@@ -43,6 +43,8 @@ function capacityLabel(open: number) {
 export default function TeamPage() {
   const tasks = useQuery(api.taskBoard.list, {});
   const teamMembers = useQuery(api.teamMembers.list, {});
+  const agents = useQuery(api.agents.list, { enabledOnly: false });
+  const runs = useQuery(api.runs.list, { limit: 300 });
   const ensureTeamSeed = useMutation(api.teamMembers.ensureSeed);
 
   const [spawnTask, setSpawnTask] = useState("");
@@ -170,6 +172,11 @@ export default function TeamPage() {
           <div className="grid gap-3 md:grid-cols-2">
             {groups[discipline].map((member) => {
               const stats = runStats.get(member.id);
+              const agent = agents?.find((a) => (a.sessionKey.split(":")[1] ?? "") === member.id);
+              const lastRun = runs?.find((r) => {
+                const tail = (r.sessionKey.split(":")[1] ?? "").toLowerCase();
+                return tail === member.id;
+              });
               return (
                 <article key={member.id} className="rounded-xl border bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
@@ -192,6 +199,13 @@ export default function TeamPage() {
                     >
                       {spawningMember === member.id ? "Spawning…" : "Spawn with role brief"}
                     </button>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border bg-zinc-50 p-2 text-[11px]">
+                    <div className="text-zinc-500">Session</div>
+                    <div className="font-mono">{agent?.sessionKey ?? `agent:${member.id}`}</div>
+                    <div className="mt-1 text-zinc-500">Level · last run</div>
+                    <div className="font-medium">{agent?.level ?? "specialist"} · {lastRun ? `${lastRun.status} (${new Date(lastRun.updatedAt ?? lastRun.createdAt).toLocaleString()})` : "none"}</div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border bg-zinc-50 p-2 text-[11px]">

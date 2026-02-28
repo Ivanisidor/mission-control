@@ -134,11 +134,13 @@ export default defineSchema({
     priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("urgent"))),
     evidenceRef: v.optional(v.string()),
     createdBy: v.optional(v.string()),
+    migrationKey: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_status", ["status"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_updatedAt", ["updatedAt"])
+    .index("by_migrationKey", ["migrationKey"]),
 
   messages: defineTable({
     taskId: v.id("tasks"),

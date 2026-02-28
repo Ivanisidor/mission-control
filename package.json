@@ -10,7 +10,10 @@
     "log": "node scripts/log.mjs",
     "sync:cron": "node scripts/sync-cron.mjs",
     "worker:notifications": "node scripts/notification-worker.mjs",
-    "standup:daily": "node scripts/daily-standup.mjs"
+    "standup:daily": "node scripts/daily-standup.mjs",
+    "backup:convex": "node scripts/convex-backup.mjs",
+    "migrate:v1": "node scripts/migrate-legacy-to-v1.mjs",
+    "heartbeat:check": "node scripts/heartbeat-check.mjs"
   },
   "dependencies": {
     "convex": "^1.31.7",
