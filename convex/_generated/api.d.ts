@@ -9,11 +9,20 @@
  */
 
 import type * as activityEvents from "../activityEvents.js";
+import type * as agents from "../agents.js";
+import type * as documents from "../documents.js";
 import type * as followUpQueue from "../followUpQueue.js";
+import type * as messages from "../messages.js";
+import type * as notifications from "../notifications.js";
+import type * as office from "../office.js";
+import type * as runs from "../runs.js";
 import type * as scheduledTasks from "../scheduledTasks.js";
 import type * as search from "../search.js";
+import type * as standup from "../standup.js";
 import type * as taskBoard from "../taskBoard.js";
+import type * as tasks from "../tasks.js";
 import type * as teamMembers from "../teamMembers.js";
+import type * as threadSubscriptions from "../threadSubscriptions.js";
 
 import type {
   ApiFromModules,
@@ -23,11 +32,20 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activityEvents: typeof activityEvents;
+  agents: typeof agents;
+  documents: typeof documents;
   followUpQueue: typeof followUpQueue;
+  messages: typeof messages;
+  notifications: typeof notifications;
+  office: typeof office;
+  runs: typeof runs;
   scheduledTasks: typeof scheduledTasks;
   search: typeof search;
+  standup: typeof standup;
   taskBoard: typeof taskBoard;
+  tasks: typeof tasks;
   teamMembers: typeof teamMembers;
+  threadSubscriptions: typeof threadSubscriptions;
 }>;
 
 /**

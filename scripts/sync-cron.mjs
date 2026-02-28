@@ -24,8 +24,6 @@ async function main() {
   }
 
   // Skip header
-  const header = lines[0];
-  const idIdx = 0;
   const rows = lines.slice(1);
 
   for (const row of rows) {
@@ -35,7 +33,6 @@ async function main() {
     const id = cols[0]?.trim();
     const name = cols[1]?.trim() || id;
     const schedule = cols[2]?.trim() || "";
-    const status = cols[5]?.trim() || "unknown";
 
     // Parse schedule kind + expr
     let scheduleKind = "unknown";
@@ -52,14 +49,6 @@ async function main() {
     // nextRunAt: try to parse "in Xh" or similar — just use now + rough estimate
     // For a proper sync we'd use the JSON API, but this is a first pass
     const nextRunAt = Date.now() + 3600_000; // placeholder
-
-    // POST to Convex HTTP action or use the mutation via ConvexHttpClient
-    const body = JSON.stringify({
-      name: `${name} (${status})`,
-      scheduleKind,
-      scheduleExpr,
-      nextRunAt,
-    });
 
     try {
       const resp = await fetch(`${CONVEX_URL}/api/mutation`, {

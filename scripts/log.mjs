@@ -27,7 +27,7 @@ let details;
 if (detailsJson) {
   try {
     details = JSON.parse(detailsJson);
-  } catch (e) {
+  } catch {
     console.error("detailsJson must be valid JSON");
     process.exit(2);
   }

@@ -1,10 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-
-type Status = "todo" | "in_progress" | "blocked" | "done";
 
 function startOfWeek(d: Date) {
   const date = new Date(d);
@@ -34,9 +31,41 @@ export default function WeeklySummaryPage() {
     limit: 200,
   });
 
-  const summary = useMemo(() => {
-    if (!tasks || !followUps || !teamMembers) return null;
+  type FollowUpRow = {
+    _id: string;
+    project: string;
+    title: string;
+    requestedBy: string;
+    status: string;
+  };
 
+  type UpcomingEventRow = {
+    _id: string;
+    nextRunAt: number;
+    name: string;
+    assignee?: string;
+  };
+
+  let summary: {
+    byProject: Map<
+      string,
+      {
+        todo: number;
+        inProgress: number;
+        blocked: number;
+        done: number;
+        blockers: string[];
+        owners: Set<string>;
+        recentDone: string[];
+      }
+    >;
+    pendingFollowUps: FollowUpRow[];
+    resolvedThisWeek: FollowUpRow[];
+    upcomingEvents: UpcomingEventRow[];
+    teamCount: number;
+  } | null = null;
+
+  if (tasks && followUps && teamMembers) {
     const byProject = new Map<string, {
       todo: number;
       inProgress: number;
@@ -46,6 +75,8 @@ export default function WeeklySummaryPage() {
       owners: Set<string>;
       recentDone: string[];
     }>();
+
+    const weekStartMs = weekStart.getTime();
 
     for (const t of tasks) {
       const p = (t as { project?: string }).project || "unset";
@@ -61,21 +92,21 @@ export default function WeeklySummaryPage() {
         bucket.blockers.push(`${t.title} (${t.assignee})`);
       } else if (t.status === "done") {
         bucket.done++;
-        if (t.updatedAt >= weekStart.getTime()) {
+        if (t.updatedAt >= weekStartMs) {
           bucket.recentDone.push(t.title);
         }
       }
     }
 
-    const pendingFollowUps = followUps.filter((f) => f.status === "pending");
+    const pendingFollowUps = followUps.filter((f) => f.status === "pending") as unknown as FollowUpRow[];
     const resolvedThisWeek = followUps.filter(
-      (f) => f.status !== "pending" && f.resolvedAt && f.resolvedAt >= weekStart.getTime(),
-    );
+      (f) => f.status !== "pending" && f.resolvedAt && f.resolvedAt >= weekStartMs,
+    ) as unknown as FollowUpRow[];
 
-    const upcomingEvents = (calendarTasks ?? []).slice(0, 10);
+    const upcomingEvents = ((calendarTasks ?? []).slice(0, 10)) as unknown as UpcomingEventRow[];
 
-    return { byProject, pendingFollowUps, resolvedThisWeek, upcomingEvents, teamCount: teamMembers.length };
-  }, [tasks, followUps, teamMembers, calendarTasks, weekStart]);
+    summary = { byProject, pendingFollowUps, resolvedThisWeek, upcomingEvents, teamCount: teamMembers.length };
+  }
 
   if (!summary) {
     return <div className="p-6 text-sm text-muted-foreground">Loading summary…</div>;

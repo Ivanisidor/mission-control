@@ -4,7 +4,6 @@ import { ConvexProvider, ConvexReactClient } from "convex/react";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 if (!convexUrl) {
-  // eslint-disable-next-line no-console
   console.warn(
     "NEXT_PUBLIC_CONVEX_URL is not set. Convex queries will fail until configured."
   );

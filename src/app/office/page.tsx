@@ -16,17 +16,19 @@ const agentMeta: Record<string, { emoji: string; color: string; deskX: number; d
   cris:  { emoji: "🥗", color: "#14b8a6", deskX: 640, deskY: 360 },
 };
 
-const statusPulse: Record<string, string> = {
-  active: "animate-pulse",
-  ready: "",
-  idle: "opacity-60",
-};
-
 type TaskLike = {
   assignee: string;
   status: string;
   title: string;
   project?: string;
+};
+
+type InteractionEdge = {
+  from: string;
+  to: string;
+  type: "mention" | "activity" | "project";
+  count: number;
+  lastAt: number;
 };
 
 function projectColor(project: string): string {
@@ -36,22 +38,41 @@ function projectColor(project: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export default function OfficePage() {
-  const tasks = useQuery(api.taskBoard.list, {});
-  const teamMembers = useQuery(api.teamMembers.list, {});
-  const activityEvents = useQuery(api.activityEvents.list, { limit: 20 });
+function edgeColor(edge: InteractionEdge): string {
+  if (edge.type === "mention") return "#22c55e";
+  if (edge.type === "activity") return "#0ea5e9";
+  return projectColor(`${edge.from}-${edge.to}`);
+}
 
+function mergeEdge(map: Map<string, InteractionEdge>, edge: Omit<InteractionEdge, "count" | "lastAt"> & { lastAt: number }) {
+  const key = `${edge.from}->${edge.to}:${edge.type}`;
+  const existing = map.get(key);
+  if (!existing) {
+    map.set(key, { ...edge, count: 1 });
+    return;
+  }
+  existing.count += 1;
+  existing.lastAt = Math.max(existing.lastAt, edge.lastAt);
+}
+
+export default function OfficePage() {
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [windowMinutes, setWindowMinutes] = useState<number>(60);
+
+  const tasks = useQuery(api.taskBoard.list, {});
+  const teamMembers = useQuery(api.teamMembers.list, {});
+  const activityEvents = useQuery(api.activityEvents.list, { limit: 200 });
+  const officeGraph = useQuery(api.office.interactionsGraph, { windowMinutes });
 
   const members = (teamMembers && teamMembers.length > 0 ? teamMembers : LEGACY_TEAM_MEMBERS) as TeamMember[];
 
-  // Build collaboration links: agents sharing same active project
-  const { collabLinks, agentProjects, agentTasks } = useMemo(() => {
+  // Build collaboration links and interaction edges
+  const { collabLinks, interactionLinks, hasInteractions, agentProjects, agentTasks } = useMemo(() => {
     const taskList = (tasks ?? []) as TaskLike[];
     const activeTasks = taskList.filter((t) => t.status === "in_progress" || t.status === "todo");
 
-    // Map agent → active projects
+    // Map agent → active projects/tasks
     const ap = new Map<string, Set<string>>();
     const at = new Map<string, TaskLike[]>();
     for (const t of activeTasks) {
@@ -62,20 +83,94 @@ export default function OfficePage() {
       at.get(t.assignee)!.push(t);
     }
 
-    // Find pairs sharing a project
-    const links: Array<{ from: string; to: string; project: string }> = [];
+    // Project-based fallback links
+    const projectLinks: InteractionEdge[] = [];
     const agents = [...ap.keys()];
     for (let i = 0; i < agents.length; i++) {
       for (let j = i + 1; j < agents.length; j++) {
-        const shared = [...ap.get(agents[i])!].filter((p) => ap.get(agents[j])!.has(p));
-        for (const p of shared) {
-          links.push({ from: agents[i], to: agents[j], project: p });
+        const sharedCount = [...ap.get(agents[i])!].filter((proj) => ap.get(agents[j])!.has(proj)).length;
+        if (sharedCount > 0) {
+          projectLinks.push({ from: agents[i], to: agents[j], type: "project", count: sharedCount, lastAt: Date.now() });
         }
       }
     }
 
-    return { collabLinks: links, agentProjects: ap, agentTasks: at };
-  }, [tasks]);
+    // Activity-based interaction links
+    const since = Date.now() - windowMinutes * 60_000;
+    const edgeMap = new Map<string, InteractionEdge>();
+    const knownIds = new Set<string>(["ivan", ...members.map((m) => m.id)]);
+
+    const aliases = new Map<string, string>();
+    aliases.set("@ivan", "ivan");
+    aliases.set("ivan", "ivan");
+    for (const m of members) {
+      aliases.set(m.id.toLowerCase(), m.id);
+      aliases.set(`@${m.id.toLowerCase()}`, m.id);
+      aliases.set(m.name.toLowerCase(), m.id);
+      aliases.set(m.name.split(" ")[0].toLowerCase(), m.id);
+    }
+
+    for (const e of activityEvents ?? []) {
+      if (e.createdAt < since) continue;
+      const text = `${e.summary ?? ""} ${JSON.stringify(e.details ?? "")}`.toLowerCase();
+      if (!text.trim()) continue;
+
+      const mentions = [...text.matchAll(/@([a-z0-9_-]+)/g)]
+        .map((m) => m[1])
+        .map((id) => aliases.get(`@${id}`) ?? aliases.get(id) ?? id)
+        .filter((id) => knownIds.has(id));
+
+      const orderedMentions: Array<{ id: string; index: number }> = [];
+      aliases.forEach((id, alias) => {
+        const idx = text.indexOf(alias);
+        if (idx >= 0 && knownIds.has(id)) orderedMentions.push({ id, index: idx });
+      });
+      orderedMentions.sort((a, b) => a.index - b.index);
+      const uniqueOrdered = orderedMentions.filter((v, i, arr) => i === arr.findIndex((x) => x.id === v.id));
+
+      if (mentions.length >= 1 && uniqueOrdered.length >= 1) {
+        const from = uniqueOrdered[0]?.id;
+        for (const to of mentions) {
+          if (from && to && from !== to) mergeEdge(edgeMap, { from, to, type: "mention", lastAt: e.createdAt });
+        }
+      }
+
+      if (uniqueOrdered.length >= 2) {
+        for (let i = 0; i < uniqueOrdered.length - 1; i++) {
+          const from = uniqueOrdered[i].id;
+          const to = uniqueOrdered[i + 1].id;
+          if (from !== to) mergeEdge(edgeMap, { from, to, type: "activity", lastAt: e.createdAt });
+        }
+      }
+    }
+
+    const serverAlias = new Map<string, string>();
+    for (const node of officeGraph?.nodes ?? []) {
+      const tail = String(node.sessionKey ?? "").split(":")[1]?.toLowerCase();
+      if (tail) serverAlias.set(String(node.id), tail === "main" ? "main" : tail);
+    }
+
+    for (const edge of officeGraph?.edges ?? []) {
+      const from = serverAlias.get(String(edge.from));
+      const to = serverAlias.get(String(edge.to));
+      if (!from || !to || from === to || !knownIds.has(from) || !knownIds.has(to)) continue;
+      mergeEdge(edgeMap, {
+        from,
+        to,
+        type: edge.type === "mention" ? "mention" : "activity",
+        lastAt: edge.lastAt,
+      });
+    }
+
+    const interactions = [...edgeMap.values()].sort((a, b) => b.lastAt - a.lastAt || b.count - a.count);
+    return {
+      collabLinks: projectLinks,
+      interactionLinks: interactions,
+      hasInteractions: interactions.length > 0,
+      agentProjects: ap,
+      agentTasks: at,
+    };
+  }, [tasks, activityEvents, members, officeGraph, windowMinutes]);
 
   const board = useMemo(() => {
     const list = (tasks ?? []) as TaskLike[];
@@ -113,7 +208,24 @@ export default function OfficePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Office</h1>
-        <p className="text-sm text-muted-foreground">Live animated team workspace. Lines connect agents collaborating on the same project.</p>
+        <p className="text-sm text-muted-foreground">Live animated team workspace. Interaction lines appear when agent-to-agent activity exists in the selected time window.</p>
+      </div>
+
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-muted-foreground">Interaction window:</span>
+        <select
+          className="rounded-md border bg-white px-2 py-1"
+          value={windowMinutes}
+          onChange={(e) => setWindowMinutes(Number(e.target.value))}
+        >
+          <option value={15}>Last 15m</option>
+          <option value={60}>Last 1h</option>
+          <option value={240}>Last 4h</option>
+          <option value={1440}>Last 24h</option>
+        </select>
+        <span className="text-muted-foreground">
+          {hasInteractions ? `Showing ${interactionLinks.length} interaction link${interactionLinks.length === 1 ? "" : "s"}` : "No interactions found, showing project collaboration"}
+        </span>
       </div>
 
       {/* Stats bar */}
@@ -123,6 +235,13 @@ export default function OfficePage() {
         <Stat label="Queued" value={board.todo} sub="to do" />
         <Stat label="Done" value={board.done} sub="completed" />
       </div>
+
+      {officeGraph && (
+        <div className="rounded-xl border bg-white p-3 text-xs text-muted-foreground">
+          Observability snapshot: {officeGraph.nodes.length} agent nodes, {officeGraph.edges.length} server-derived edges,
+          updated for last {windowMinutes}m.
+        </div>
+      )}
 
       {/* Animated office floor */}
       <div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-slate-50 via-white to-slate-100 shadow-inner" style={{ minHeight: 480 }}>
@@ -136,24 +255,25 @@ export default function OfficePage() {
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
 
-        {/* Collaboration lines */}
+        {/* Collaboration / interaction lines */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full">
-          {collabLinks.map((link, i) => {
+          {(hasInteractions ? interactionLinks : collabLinks).map((link, i) => {
             const fromMeta = agentMeta[link.from];
             const toMeta = agentMeta[link.to];
             if (!fromMeta || !toMeta) return null;
-            const color = projectColor(link.project);
+            const color = edgeColor(link);
+            const label = link.type === "project" ? "project" : `${link.type} ×${link.count}`;
             return (
-              <g key={`${link.from}-${link.to}-${link.project}-${i}`}>
+              <g key={`${link.from}-${link.to}-${link.type}-${i}`}>
                 <line
                   x1={fromMeta.deskX}
                   y1={fromMeta.deskY}
                   x2={toMeta.deskX}
                   y2={toMeta.deskY}
                   stroke={color}
-                  strokeWidth="2"
-                  strokeDasharray="6 4"
-                  opacity="0.4"
+                  strokeWidth={link.type === "mention" ? "2.5" : "2"}
+                  strokeDasharray={link.type === "activity" ? "6 4" : undefined}
+                  opacity="0.45"
                 >
                   <animate
                     attributeName="stroke-dashoffset"
@@ -163,7 +283,6 @@ export default function OfficePage() {
                     repeatCount="indefinite"
                   />
                 </line>
-                {/* Project label at midpoint */}
                 <text
                   x={(fromMeta.deskX + toMeta.deskX) / 2}
                   y={(fromMeta.deskY + toMeta.deskY) / 2 - 8}
@@ -171,9 +290,9 @@ export default function OfficePage() {
                   fill={color}
                   fontSize="10"
                   fontWeight="600"
-                  opacity="0.7"
+                  opacity="0.8"
                 >
-                  {link.project}
+                  {label}
                 </text>
               </g>
             );
@@ -287,7 +406,13 @@ export default function OfficePage() {
           <span className="inline-block h-2 w-2 rounded-full bg-zinc-300" /> Idle
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-1 w-6 border-t-2 border-dashed border-indigo-400" /> Collaborating
+          <span className="inline-block h-1 w-6 border-t-2 border-dashed border-sky-500" /> Activity link
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1 w-6 border-t-2 border-emerald-500" /> Mention link
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1 w-6 border-t-2 border-indigo-400" /> Project fallback
         </span>
       </div>
     </div>

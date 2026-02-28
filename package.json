@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "log": "node scripts/log.mjs",
-    "sync:cron": "node scripts/sync-cron.mjs"
+    "sync:cron": "node scripts/sync-cron.mjs",
+    "worker:notifications": "node scripts/notification-worker.mjs",
+    "standup:daily": "node scripts/daily-standup.mjs"
   },
   "dependencies": {
     "convex": "^1.31.7",
