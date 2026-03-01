@@ -27,9 +27,9 @@ export default function RootLayout({
       <body>
         <Providers>
           <div className="min-h-screen bg-zinc-50">
-            <div className="flex min-h-screen">
+            <div className="flex min-h-screen flex-col md:flex-row">
               <Sidebar />
-              <main className="flex-1 p-6">
+              <main className="flex-1 p-4 md:p-6">
                 <div className="mx-auto w-full max-w-5xl">{children}</div>
               </main>
             </div>

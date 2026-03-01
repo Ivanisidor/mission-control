@@ -195,14 +195,14 @@ export default function TasksPage() {
 
       <div className="rounded-lg border bg-white p-4">
         <div className="mb-2 text-sm font-medium">Add task</div>
-        <div className="flex flex-wrap gap-2">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void addTask()} placeholder="What needs to get done?" className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm" />
-          <select value={effectiveAssignee} onChange={(e) => setAssignee(e.target.value)} className="rounded-md border px-3 py-2 text-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void addTask()} placeholder="What needs to get done?" className="w-full min-w-0 flex-1 rounded-md border px-3 py-2 text-sm sm:min-w-[280px]" />
+          <select value={effectiveAssignee} onChange={(e) => setAssignee(e.target.value)} className="w-full rounded-md border px-3 py-2 text-sm sm:w-auto">
             {assigneeOptions.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
-          <button onClick={() => void addTask()} className="rounded-md bg-black px-4 py-2 text-sm text-white">Add</button>
+          <button onClick={() => void addTask()} className="w-full rounded-md bg-black px-4 py-2 text-sm text-white sm:w-auto">Add</button>
         </div>
       </div>
 
@@ -227,13 +227,13 @@ export default function TasksPage() {
                       <div className="text-sm font-medium">{task.title}</div>
                       <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee)}</div>
 
-                      <div className="mt-2 flex gap-2">
-                        <select value={task.assignee} onChange={(e) => void patchTask(task, { assignee: e.target.value })} className="rounded border px-2 py-1 text-xs">
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                        <select value={task.assignee} onChange={(e) => void patchTask(task, { assignee: e.target.value })} className="w-full rounded border px-2 py-1 text-xs sm:w-auto">
                           {assigneeOptions.map((a) => (
                             <option key={a.id} value={a.id}>{a.name}</option>
                           ))}
                         </select>
-                        <select value={task.status} onChange={(e) => void patchTask(task, { status: e.target.value as Status })} className="rounded border px-2 py-1 text-xs">
+                        <select value={task.status} onChange={(e) => void patchTask(task, { status: e.target.value as Status })} className="w-full rounded border px-2 py-1 text-xs sm:w-auto">
                           <option value="todo">To Do</option>
                           <option value="in_progress">In Progress</option>
                           <option value="blocked">Blocked</option>
