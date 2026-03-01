@@ -12,6 +12,15 @@ const statusValidator = v.union(
 
 const priorityValidator = v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("urgent"));
 
+function parseMentionHandles(text: string) {
+  const matches = text.match(/@[a-z0-9_-]+/gi) ?? [];
+  return Array.from(new Set(matches.map((m) => m.slice(1).toLowerCase())));
+}
+
+function sessionTail(sessionKey: string) {
+  return sessionKey.split(":").pop()?.toLowerCase() ?? "";
+}
+
 export const list = query({
   args: { status: v.optional(statusValidator), assigneeId: v.optional(v.id("agents")) },
   handler: async (ctx, args) => {
@@ -34,7 +43,12 @@ export const forAgent = query({
     if (!agent) return [];
 
     const rows = await ctx.db.query("tasks").withIndex("by_updatedAt").order("desc").collect();
-    return rows.filter((r) => r.assigneeIds.includes(agent._id) && (!args.status || r.status === args.status));
+    return rows.filter((r) => {
+      const visible = r.assigneeIds.includes(agent._id) || (r.watcherIds ?? []).includes(agent._id);
+      if (!visible) return false;
+      if (args.status && r.status !== args.status) return false;
+      return true;
+    });
   },
 });
 
@@ -49,21 +63,54 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const status = args.assigneeIds.length > 0 ? "assigned" : "inbox";
+
+    const allAgents = await ctx.db.query("agents").collect();
+    const mentions = parseMentionHandles(`${args.title} ${args.description}`);
+    const mentionedAgents = allAgents.filter((a) => {
+      const tail = sessionTail(a.sessionKey);
+      const firstName = a.name.split(" ")[0]?.toLowerCase() ?? "";
+      return mentions.includes(tail) || mentions.includes(firstName);
+    });
+
+    const watcherIds = Array.from(new Set([...args.assigneeIds, ...mentionedAgents.map((a) => a._id)]));
+
     const id = await ctx.db.insert("tasks", {
       title: args.title,
       description: args.description,
       status,
       assigneeIds: args.assigneeIds,
-      watcherIds: args.assigneeIds,
+      watcherIds,
       priority: args.priority,
       createdBy: args.createdBy,
       createdAt: now,
       updatedAt: now,
     });
+
+    for (const mentioned of mentionedAgents) {
+      await ctx.db.insert("threadSubscriptions", {
+        taskId: id,
+        agentId: mentioned._id,
+        reason: "mentioned",
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("notifications", {
+        mentionedAgentId: mentioned._id,
+        taskId: id,
+        content: `You were mentioned on task: ${args.title}`,
+        delivered: false,
+        deliveryAttempts: 0,
+        nextAttemptAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     await ctx.db.insert("activityEvents", {
       type: "task_created",
       summary: `Task created: ${args.title}`,
-      details: { id, status, assigneeIds: args.assigneeIds },
+      details: { id, status, assigneeIds: args.assigneeIds, mentionCount: mentionedAgents.length },
       createdAt: now,
     });
     return id;
@@ -171,6 +218,82 @@ export const claimAssignedForSessionKey = mutation({
     }
 
     return { claimed: toClaim.length, taskIds: toClaim.map((t) => String(t._id)) };
+  },
+});
+
+export const delegatePortion = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    fromSessionKey: v.string(),
+    toSessionKey: v.string(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) return null;
+
+    const fromAgent = await ctx.db
+      .query("agents")
+      .withIndex("by_sessionKey", (q) => q.eq("sessionKey", args.fromSessionKey))
+      .first();
+    const toAgent = await ctx.db
+      .query("agents")
+      .withIndex("by_sessionKey", (q) => q.eq("sessionKey", args.toSessionKey))
+      .first();
+
+    if (!fromAgent || !toAgent) throw new Error("Invalid from/to agent session key");
+    if (!task.assigneeIds.includes(fromAgent._id)) throw new Error("Only assigned agents can delegate this task");
+
+    const now = Date.now();
+    const assigneeIds = Array.from(new Set([...task.assigneeIds, toAgent._id]));
+    const watcherIds = Array.from(new Set([...(task.watcherIds ?? []), toAgent._id]));
+
+    await ctx.db.patch(args.taskId, {
+      assigneeIds,
+      watcherIds,
+      status: task.status === "inbox" ? "assigned" : task.status,
+      updatedAt: now,
+    });
+
+    const existingSub = await ctx.db
+      .query("threadSubscriptions")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .collect();
+    const already = existingSub.find((s) => s.agentId === toAgent._id);
+    if (!already) {
+      await ctx.db.insert("threadSubscriptions", {
+        taskId: args.taskId,
+        agentId: toAgent._id,
+        reason: "assigned",
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const content =
+      `Handoff request from ${fromAgent.name}: ${task.title}` +
+      (args.note?.trim() ? `\n\nScope note: ${args.note.trim()}` : "");
+
+    await ctx.db.insert("notifications", {
+      mentionedAgentId: toAgent._id,
+      taskId: args.taskId,
+      content,
+      delivered: false,
+      deliveryAttempts: 0,
+      nextAttemptAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("activityEvents", {
+      type: "task_handoff",
+      summary: `${fromAgent.name} handed off part of task to ${toAgent.name}`,
+      details: { taskId: args.taskId, fromAgentId: fromAgent._id, toAgentId: toAgent._id, note: args.note },
+      createdAt: now,
+    });
+
+    return { taskId: args.taskId, toAgentId: toAgent._id };
   },
 });
 
