@@ -13,6 +13,7 @@ const nav = [
   { href: "/follow-ups", label: "Follow-Ups" },
   { href: "/activity", label: "Activity" },
   { href: "/weekly-summary", label: "Weekly Summary" },
+  { href: "/costs", label: "Costs" },
   { href: "/search", label: "Search" },
 ];
 

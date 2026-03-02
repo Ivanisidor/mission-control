@@ -1,4 +1,5 @@
 import Link from "next/link";
+import GatewayLiveCard from "@/components/GatewayLiveCard";
 
 export default function Home() {
   return (
@@ -7,7 +8,7 @@ export default function Home() {
       <p className="text-sm text-muted-foreground">
         Your dashboard for Nux activity, scheduled tasks, and global search.
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Link className="rounded-md bg-black px-4 py-2 text-sm text-white" href="/tasks">
           Task Board
         </Link>
@@ -26,7 +27,12 @@ export default function Home() {
         <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/search">
           Search
         </Link>
+        <Link className="rounded-md border bg-white px-4 py-2 text-sm" href="/costs">
+          Costs
+        </Link>
       </div>
+
+      <GatewayLiveCard />
     </div>
   );
 }
