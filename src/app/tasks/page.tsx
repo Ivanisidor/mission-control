@@ -46,9 +46,14 @@ export default function TasksPage() {
   const createV1Task = useMutation(api.tasks.create);
   const assignV1Task = useMutation(api.tasks.assign);
   const transitionV1Task = useMutation(api.tasks.transition);
+  const editV1Task = useMutation(api.tasks.edit);
+  const archiveV1Task = useMutation(api.tasks.archive);
+  const deleteV1Task = useMutation(api.tasks.remove);
 
   const createLegacyTask = useMutation(api.taskBoard.create);
   const updateLegacyTask = useMutation(api.taskBoard.update);
+  const archiveLegacyTask = useMutation(api.taskBoard.archive);
+  const deleteLegacyTask = useMutation(api.taskBoard.remove);
 
   const [title, setTitle] = useState("");
   const [query] = useState(() => {
@@ -57,6 +62,7 @@ export default function TasksPage() {
   });
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
   const hasV1Agents = !!agents && agents.length > 0;
   const hasV1Tasks = !!v1Tasks && v1Tasks.length > 0;
@@ -182,6 +188,57 @@ export default function TasksPage() {
     }
   }
 
+  async function editTask(task: ViewTask) {
+    const nextTitle = window.prompt("Edit task title", task.title)?.trim();
+    if (!nextTitle || nextTitle === task.title) return;
+    setError("");
+    try {
+      if (task.source === "v1") {
+        await editV1Task({ id: task.id as Id<"tasks">, title: nextTitle, description: nextTitle });
+      } else {
+        await updateLegacyTask({ id: task.id as Id<"taskBoardTasks">, title: nextTitle });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to edit task.");
+    }
+  }
+
+  async function archiveTask(task: ViewTask) {
+    if (!window.confirm("Archive this task?")) return;
+    setError("");
+    try {
+      if (task.source === "v1") {
+        await archiveV1Task({ id: task.id as Id<"tasks"> });
+      } else {
+        await archiveLegacyTask({ id: task.id as Id<"taskBoardTasks"> });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to archive task.");
+    }
+  }
+
+  async function deleteTask(task: ViewTask) {
+    if (!window.confirm("Delete this task permanently?")) return;
+    setError("");
+    try {
+      if (task.source === "v1") {
+        await deleteV1Task({ id: task.id as Id<"tasks"> });
+      } else {
+        await deleteLegacyTask({ id: task.id as Id<"taskBoardTasks"> });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete task.");
+    }
+  }
+
+  async function handleDrop(toStatus: Status) {
+    if (!draggingTaskId) return;
+    const task = viewTasks.find((t) => t.id === draggingTaskId);
+    setDraggingTaskId(null);
+    if (!task || task.status === toStatus) return;
+    await patchTask(task, { status: toStatus });
+  }
+
   const loading = !v1Tasks || !legacyTasks || !agents || !teamMembers;
 
   return (
@@ -213,7 +270,12 @@ export default function TasksPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {(Object.keys(statusLabel) as Status[]).map((status) => (
-            <section key={status} className="rounded-lg border bg-white p-3">
+            <section
+              key={status}
+              className="rounded-lg border bg-white p-3"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => void handleDrop(status)}
+            >
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">{statusLabel[status]}</h2>
                 <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs">{grouped[status].length}</span>
@@ -223,9 +285,21 @@ export default function TasksPage() {
                 {grouped[status].map((task) => {
                   const draft = getDraft(task);
                   return (
-                    <article key={task.id} className="rounded-md border p-2">
+                    <article
+                      key={task.id}
+                      className="rounded-md border p-2"
+                      draggable
+                      onDragStart={() => setDraggingTaskId(task.id)}
+                      onDragEnd={() => setDraggingTaskId(null)}
+                    >
                       <div className="text-sm font-medium">{task.title}</div>
                       <div className="mt-1 text-[11px] text-muted-foreground">assigned: {assigneeName(task.assignee)}</div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button onClick={() => void editTask(task)} className="rounded border px-2 py-1 text-xs">Edit</button>
+                        <button onClick={() => void archiveTask(task)} className="rounded border px-2 py-1 text-xs">Archive</button>
+                        <button onClick={() => void deleteTask(task)} className="rounded border border-rose-300 px-2 py-1 text-xs text-rose-700">Delete</button>
+                      </div>
 
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                         <select value={task.assignee} onChange={(e) => void patchTask(task, { assignee: e.target.value })} className="w-full rounded border px-2 py-1 text-xs sm:w-auto">

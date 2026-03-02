@@ -35,6 +35,7 @@ export default defineSchema({
 
   taskBoardTasks: defineTable({
     title: v.string(),
+    archivedAt: v.optional(v.number()),
     project: v.optional(v.string()),
     status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("blocked"), v.literal("done")),
     assignee: v.string(),
@@ -119,6 +120,7 @@ export default defineSchema({
 
   tasks: defineTable({
     title: v.string(),
+    archivedAt: v.optional(v.number()),
     description: v.string(),
     status: v.union(
       v.literal("inbox"),

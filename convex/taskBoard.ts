@@ -17,7 +17,8 @@ type Status = "todo" | "in_progress" | "blocked" | "done";
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("taskBoardTasks").withIndex("by_updatedAt").order("desc").collect();
+    const rows = await ctx.db.query("taskBoardTasks").withIndex("by_updatedAt").order("desc").collect();
+    return rows.filter((r) => !r.archivedAt);
   },
 });
 
@@ -184,6 +185,27 @@ export const update = mutation({
     if (nextStatus === "done") patch.verifiedAt = now;
 
     await ctx.db.patch(args.id, patch);
+    return args.id;
+  },
+});
+
+export const archive = mutation({
+  args: { id: v.id("taskBoardTasks") },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.get(args.id);
+    if (!existing) return null;
+    const now = Date.now();
+    await ctx.db.patch(args.id, { archivedAt: now, updatedAt: now });
+    return args.id;
+  },
+});
+
+export const remove = mutation({
+  args: { id: v.id("taskBoardTasks") },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.get(args.id);
+    if (!existing) return null;
+    await ctx.db.delete(args.id);
     return args.id;
   },
 });

@@ -26,6 +26,7 @@ export const list = query({
   handler: async (ctx, args) => {
     const rows = await ctx.db.query("tasks").withIndex("by_updatedAt").order("desc").collect();
     return rows.filter((r) => {
+      if (r.archivedAt) return false;
       if (args.status && r.status !== args.status) return false;
       if (args.assigneeId && !r.assigneeIds.includes(args.assigneeId)) return false;
       return true;
@@ -44,6 +45,7 @@ export const forAgent = query({
 
     const rows = await ctx.db.query("tasks").withIndex("by_updatedAt").order("desc").collect();
     return rows.filter((r) => {
+      if (r.archivedAt) return false;
       const visible = r.assigneeIds.includes(agent._id) || (r.watcherIds ?? []).includes(agent._id);
       if (!visible) return false;
       if (args.status && r.status !== args.status) return false;
@@ -181,6 +183,60 @@ export const block = mutation({
   args: { id: v.id("tasks"), blockerReason: v.string() },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, { status: "blocked", blockerReason: args.blockerReason, updatedAt: Date.now() });
+    return args.id;
+  },
+});
+
+export const edit = mutation({
+  args: { id: v.id("tasks"), title: v.string(), description: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task) return null;
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      title: args.title,
+      description: args.description ?? args.title,
+      updatedAt: now,
+    });
+    await ctx.db.insert("activityEvents", {
+      type: "task_updated",
+      summary: `Task updated: ${args.title}`,
+      details: { id: args.id },
+      createdAt: now,
+    });
+    return args.id;
+  },
+});
+
+export const archive = mutation({
+  args: { id: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task) return null;
+    const now = Date.now();
+    await ctx.db.patch(args.id, { archivedAt: now, updatedAt: now });
+    await ctx.db.insert("activityEvents", {
+      type: "task_archived",
+      summary: `Task archived: ${task.title}`,
+      details: { id: args.id },
+      createdAt: now,
+    });
+    return args.id;
+  },
+});
+
+export const remove = mutation({
+  args: { id: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task) return null;
+    await ctx.db.delete(args.id);
+    await ctx.db.insert("activityEvents", {
+      type: "task_deleted",
+      summary: `Task deleted: ${task.title}`,
+      details: { id: args.id },
+      createdAt: Date.now(),
+    });
     return args.id;
   },
 });
